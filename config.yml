@@ -1,0 +1,36 @@
+
+
+#get desc-nnunet_dseg.nii.gz images from hippunfold as lbl, and T1w as input img
+hippunfold_img: '../hippunfold_T1w_model-b1000_newatlas/work/sub-{subject}/anat/sub-{subject}_hemi-L_space-corobl_desc-cropped_T1w.nii.gz'
+hippunfold_lbl: '../hippunfold_T1w_model-b1000_newatlas/work/sub-{subject}/seg_T1w/sub-{subject}_hemi-L_space-corobl_desc-nnunet_dseg.nii.gz'
+
+training_subjects: 'subjects.tsv' 
+
+hemis:
+  - L 
+
+
+
+
+pretrained_model: '/scratch/akhanf/1_dev/retrain_nnunet/trained_models/nnUNet/3d_fullres/Task104_hcp1200_b1000/nnUNetTrainerV2__nnUNetPlansv2.1/fold_0/model_best.model'
+
+
+
+
+
+out_resolution: '128x256x128'
+task: Task204_hcp1200_b1000_finetune_dhcp_T1w #must be Task###_name where ### is >= 100
+trainer: nnUNetTrainerV2
+architecture: 3d_fullres
+checkpoint: model_best
+
+nnunet_env:
+  nnUNet_raw_data_base: 'raw_data'
+  nnUNet_preprocessed: 'preprocessed'
+  RESULTS_FOLDER: 'trained_models'
+
+nnunet_env_tmp:
+  nnUNet_raw_data_base: 'raw_data'
+  nnUNet_preprocessed: '$TMPDIR/preprocessed'
+  RESULTS_FOLDER: 'trained_models'
+
