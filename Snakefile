@@ -1,21 +1,26 @@
-import pandas as pd
-
-
-
 
 configfile: 'config.yml'
 
+wildcard_constraints:
+    app='hippunfold',
+    hemi='L|R',
+    subject='[a-zA-Z0-9]+',
 
-df = pd.read_table(config['training_subjects'])
-subjects = list(df.subjects)
-training_subjects = subjects
-testing_subjects = []
+def get_zip_file(wildcards):
+    """ assuming we have zipfiles named as:  sub-{subject}_<...>.zip, 
+        e.g.  diffparc.zip 
+    """
+    return config['in_zip'][wildcards.app]
 
 
-hemis = config['hemis']
+(subjects,hemis)= glob_wildcards(config['hippunfold_lbl'])
 
-print(f'number of training subjects: {len(training_subjects)}')
-print(f'number of test subjects: {len(testing_subjects)}')
+testing_subjects=[]
+training_subjects=subjects
+
+print(subjects)
+print(hemis)
+
 
 localrules: cp_training_img,cp_training_lbl,plan_preprocess,create_dataset_json
 
@@ -36,9 +41,21 @@ rule all_predict:
         testing_imgs = expand('raw_data/nnUNet_predictions/{arch}/{task}/{trainer}__nnUNetPlansv2.1/{checkpoint}/hcp_{subject}{hemi}.nii.gz',subject=testing_subjects, hemi=hemis, arch=config['architecture'], task=config['task'], trainer=config['trainer'],checkpoint=config['checkpoint'],allow_missing=True),
  
 
+rule get_from_zip:
+    """ This is a generic rule to make any file within the {app} subfolder, 
+        by unzipping it from a corresponding zip file"""
+    input:
+        zip=get_zip_file
+    output:
+        '{app}/{file}' # you could add temp() around this to extract on the fly and not store it
+    shell:
+        'unzip -d {wildcards.app} {input.zip} {wildcards.file}'
+
+ 
+
 rule cp_training_img:
     input: 
-        nii = config['hippunfold_img']
+        nii = 'hippunfold/work/sub-{subject}/anat/sub-{subject}_hemi-{hemi}_space-corobl_desc-preproc_T1w.nii.gz',
     output: 'raw_data/nnUNet_raw_data/{task}/imagesTr/hcp_{subject}{hemi}_0000.nii.gz'
     threads: 32 #to make it serial on a node
     group: 'preproc'
@@ -46,7 +63,7 @@ rule cp_training_img:
 
 rule cp_testing_img:
     input: 
-        nii = config['hippunfold_img']
+        nii = 'hippunfold/work/sub-{subject}/anat/sub-{subject}_hemi-{hemi}_space-corobl_desc-preproc_T1w.nii.gz',
     output: 'raw_data/nnUNet_raw_data/{task}/imagesTs/hcp_{subject}{hemi}_0000.nii.gz'
     group: 'preproc'
     threads: 32 #to make it serial on a node
@@ -64,11 +81,11 @@ rule cp_training_lbl:
 
 rule create_dataset_json:
     input: 
-        training_imgs = expand('raw_data/nnUNet_raw_data/{task}/imagesTr/hcp_{subject}{hemi}_0000.nii.gz',subject=training_subjects, hemi=hemis, allow_missing=True),
-        training_lbls = expand('raw_data/nnUNet_raw_data/{task}/labelsTr/hcp_{subject}{hemi}.nii.gz',subject=training_subjects, hemi=hemis, allow_missing=True),
+        training_imgs = expand('raw_data/nnUNet_raw_data/{task}/imagesTr/hcp_{subject}{hemi}_0000.nii.gz',zip,subject=training_subjects, hemi=hemis,allow_missing=True),
+        training_lbls = expand('raw_data/nnUNet_raw_data/{task}/labelsTr/hcp_{subject}{hemi}.nii.gz',zip,subject=training_subjects, hemi=hemis,allow_missing=True),
         template_json = 'template.json'
     params:
-        training_imgs_nosuffix = expand('raw_data/nnUNet_raw_data/{task}/imagesTr/hcp_{subject}{hemi}.nii.gz',subject=training_subjects, hemi=hemis, allow_missing=True),
+        training_imgs_nosuffix = expand('raw_data/nnUNet_raw_data/{task}/imagesTr/hcp_{subject}{hemi}.nii.gz',zip,subject=training_subjects, hemi=hemis,allow_missing=True),
     output: 
         dataset_json = 'raw_data/nnUNet_raw_data/{task}/dataset.json'
     group: 'preproc'
@@ -105,7 +122,6 @@ def get_checkpoint_opt(wildcards, output):
 rule train_fold:
     input:
         dataset_json = 'preprocessed/{task}/dataset.json',
-        pretrained_weights = config['pretrained_model']
     params:
         nnunet_env_cmd = get_nnunet_env_tmp,
         rsync_to_tmp = f"rsync -av {config['nnunet_env']['nnUNet_preprocessed']} $TMPDIR",
@@ -125,7 +141,7 @@ rule train_fold:
     shell:
         '{params.nnunet_env_cmd} && '
         '{params.rsync_to_tmp} && '
-        'nnUNet_train -pretrained_weights {input.pretrained_weights} {params.checkpoint_opt} {wildcards.arch} {wildcards.trainer} {wildcards.task} {wildcards.fold}'
+        'nnUNet_train {params.checkpoint_opt} {wildcards.arch} {wildcards.trainer} {wildcards.task} {wildcards.fold}'
 
 
 rule package_trained_model:
