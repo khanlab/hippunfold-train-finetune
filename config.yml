@@ -10,23 +10,48 @@ hippunfold_img: '../hippunfold_T1w_model-b1000_newatlas/work/sub-{subject}/anat/
 hippunfold_lbl: '/home/ROBARTS/alik/graham/ext-bids/developing_human_connectome/deriv/neonate_dseg_manually_corrected/sub-{subject}_hemi-{hemi}_space-corobl_desc-postproc_dseg.nii.gz'
 
 
-
+dataset_json:
+  name: HippDHCP
+  description: dHCP manually-corrected dataset for hippunfold
+  reference: Western University
+  license: CC-BY-SA 4.0
+  release: 0.1
+  tensorImageSize: 3D
+  channel_names:
+    '0': T1
+  labels:
+    background: 0
+    GM: 1
+    SRLM: 2
+    MTLC: 3
+    Pial: 4
+    HATA: 5
+    IndGris: 6
+    Cyst: 7
+    DG: 8
+  file_ending: .nii.gz
+  numTraining: 0
+  numTest: 0
+  training: []
+  test: []
+  
 
 
 
 out_resolution: '128x256x128'
-task: Task204_hcp1200_b1000_finetune_dhcp_T1w #must be Task###_name where ### is >= 100
-trainer: nnUNetTrainerV2
+dataset: Dataset301_dhcp_T1w_synthseg_manuallycorrected 
+trainer: nnUNetTrainer
+plans: nnUNetPlans
 architecture: 3d_fullres
-checkpoint: model_best
+checkpoint: checkpoint_best #or checkpoint_final
 
 nnunet_env:
-  nnUNet_raw_data_base: 'raw_data'
+  nnUNet_raw: 'raw_data'
   nnUNet_preprocessed: 'preprocessed'
-  RESULTS_FOLDER: 'trained_models'
+  nnUNet_results: 'trained_models'
 
 nnunet_env_tmp:
   nnUNet_raw_data_base: 'raw_data'
   nnUNet_preprocessed: '$TMPDIR/preprocessed'
-  RESULTS_FOLDER: 'trained_models'
+  nnUNet_results: 'trained_models'
 

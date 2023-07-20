@@ -1,13 +1,11 @@
 import json
 
 #load template json
-with open(snakemake.input.template_json) as f:
-    dataset = json.load(f)
+dataset=snakemake.config['dataset_json']
+
 
 dataset['training'] = [{'image': img, 'label': lbl} for img,lbl in zip(snakemake.params.training_imgs_nosuffix,snakemake.input.training_lbls)]
     
-
-
 dataset['numTraining'] = len(dataset['training'])
 
 #write modified json
