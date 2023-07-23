@@ -1,13 +1,12 @@
 
 
 in_zip: 
-  hippunfold: /home/ROBARTS/alik/graham/ext-bids/developing_human_connectome/deriv/hippunfold_v1.2.1_synthseg_dHCP_neonatal.zip
+  hippunfold: '/project/6050199/akhanf/ext-bids/developing_human_connectome/deriv/hippunfold_v1.2.1_synthseg_dHCP_neonatal.zip'
 
 
 
 #get desc-nnunet_dseg.nii.gz images from hippunfold as lbl, and T1w as input img
-hippunfold_img: '../hippunfold_T1w_model-b1000_newatlas/work/sub-{subject}/anat/sub-{subject}_hemi-L_space-corobl_desc-cropped_T1w.nii.gz'
-hippunfold_lbl: '/home/ROBARTS/alik/graham/ext-bids/developing_human_connectome/deriv/neonate_dseg_manually_corrected/sub-{subject}_hemi-{hemi}_space-corobl_desc-postproc_dseg.nii.gz'
+hippunfold_lbl: '/project/6050199/akhanf/ext-bids/developing_human_connectome/deriv/neonate_dseg_manually_corrected/sub-{subject}_hemi-{hemi}_space-corobl_desc-postproc_dseg.nii.gz'
 
 
 dataset_json:

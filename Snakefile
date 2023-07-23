@@ -5,6 +5,7 @@ wildcard_constraints:
     app='hippunfold',
     hemi='L|R',
     subject='[a-zA-Z0-9]+',
+    i='[0-9]+'
 
 def get_zip_file(wildcards):
     """ assuming we have zipfiles named as:  sub-{subject}_<...>.zip, 
@@ -25,18 +26,18 @@ localrules: cp_training_img,cp_training_lbl,plan_preprocess,create_dataset_json
 
 rule all_train:
     input:
-       expand('trained_models/nnUNet/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}/{checkpoint}.pth',fold=range(5), arch=config['architecture'], dataset=config['dataset'],checkpoint=config['checkpoint'], trainer=config['trainer'],plans=config['plans'])
+       expand('trained_models/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}.round_{i}.DONE',fold=range(5), arch=config['architecture'], dataset=config['dataset'], trainer=config['trainer'],plans=config['plans'],i=16)
 
  
 rule all_model_tar:
     """Target rule to package trained model into a tar file"""
     input:
-        model_tar = expand('trained_model.{arch}.{dataset}.{trainer}.{checkpoint}.tar',arch=config['architecture'], dataset=config['dataset'], trainer=config['trainer'],checkpoint=config['checkpoint'],plans=config['plans'])
+        model_tar = expand('trained_model.{arch}.{dataset}.{trainer}.tar',arch=config['architecture'], dataset=config['dataset'], trainer=config['trainer'],plans=config['plans'])
 
 
 rule all_predict:
     input:
-        testing_imgs = expand('raw_data/nnUNet_predictions/{dataset}/{trainer}__{plans}__{arch}/{checkpoint}/hcp_{subject}{hemi}.nii.gz',subject=testing_subjects, hemi=hemis, arch=config['architecture'], dataset=config['dataset'], trainer=config['trainer'],checkpoint=config['checkpoint'],plans=config['plans'],allow_missing=True),
+        testing_imgs = expand('raw_data/nnUNet_predictions/{dataset}/{trainer}__{plans}__{arch}/hcp_{subject}{hemi}.nii.gz',subject=testing_subjects, hemi=hemis, arch=config['architecture'], dataset=config['dataset'], trainer=config['trainer'],plans=config['plans'],allow_missing=True),
  
 
 rule get_from_zip:
@@ -110,59 +111,82 @@ rule plan_preprocess:
         '{params.nnunet_env_cmd} && '
         'nnUNetv2_plan_and_preprocess  -d {params.dataset_id} --verify_dataset_integrity'
 
-def get_checkpoint_opt(wildcards, output):
-    if os.path.exists(output.latest_model):
-        return '--continue_training'
-    else:
-        return '' 
-      
-rule train_fold:
+rule train_fold_init_round:
     input:
         dataset_json = 'preprocessed/{dataset}/dataset.json',
     params:
         nnunet_env_cmd = get_nnunet_env_tmp,
         rsync_to_tmp = f"rsync -av {config['nnunet_env']['nnUNet_preprocessed']} $TMPDIR",
-        #add --continue_training option if a checkpoint exists
-        checkpoint_opt = get_checkpoint_opt
+        output_dir = 'trained_models/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}',
     output:
-        latest_model = 'trained_models/nnUNet/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}/checkpoint_best.pth',
-        best_model = 'trained_models/nnUNet/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}/checkpoint_final.pth'
+        training_done = 'trained_models/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}.round_0.DONE'
     threads: 16
     resources:
         gpus = 1,
-        mem_mb = 64000,
-        time = 1440,
-    group: 'train'
+        mem_mb = 32000,
+        time = 180,
     shell:
         '{params.nnunet_env_cmd} && '
         '{params.rsync_to_tmp} && '
-        'nnUNetv2_train {params.checkpoint_opt} {wildcards.dataset} {wildcards.arch} {wildcards.fold}'
+        'touch {output} && '
+        'set +e; '
+        'nnUNetv2_train  {wildcards.dataset} {wildcards.arch} {wildcards.fold}'
+
+
+     
+rule train_fold_round_i:
+    input:
+        dataset_json = 'preprocessed/{dataset}/dataset.json',
+        training_done = lambda wildcards: 'trained_models/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}.round_{i}.DONE'.format(dataset=wildcards.dataset,trainer=wildcards.trainer,plans=wildcards.plans,arch=wildcards.arch, fold=wildcards.fold, i=int(wildcards.i)-1)
+    params:
+        nnunet_env_cmd = get_nnunet_env_tmp,
+        rsync_to_tmp = f"rsync -av {config['nnunet_env']['nnUNet_preprocessed']} $TMPDIR",
+        output_dir = 'trained_models/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}',
+    output:
+        training_done = 'trained_models/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}.round_{i}.DONE'
+#        latest_model = 'trained_models/nnUNet/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}/checkpoint_best.pth',
+#        best_model = 'trained_models/nnUNet/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}/checkpoint_final.pth'
+    threads: 16
+    resources:
+        gpus = 1,
+        mem_mb = 32000,
+        time = 180,
+    shell:
+        '{params.nnunet_env_cmd} && '
+        '{params.rsync_to_tmp} && '
+        'touch {output} && '
+        'set +e; '
+        'nnUNetv2_train --c {wildcards.dataset} {wildcards.arch} {wildcards.fold}'
 
 
 rule package_trained_model:
     """ Creates tar file for performing inference with workflow_inference -- note, if you do not run training to completion (1000 epochs), then you will need to clear the snakemake metadata before running this rule, else snakemake will not believe that the model has completed. """
     input:
-        latest_model = expand('trained_models/nnUNet/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}/{checkpoint}.pth',fold=range(5),allow_missing=True),
-        latest_model_pkl = expand('trained_models/nnUNet/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}/{checkpoint}.pth.pkl',fold=range(5),allow_missing=True),
-        plan = 'trained_models/nnUNet/{dataset}/{trainer}__{plans}__{arch}/plans.pkl'
+        training_done = 'trained_models/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}.DONE'
+
     params:
         trained_model_dir = config['nnunet_env']['nnUNet_results'],
         files_to_tar = 'nnUNet/{dataset}/{trainer}__{plans}__{arch}'
+#        latest_model = expand('trained_models/nnUNet/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}/{checkpoint}.pth',fold=range(5),allow_missing=True),
+#        latest_model_pkl = expand('trained_models/nnUNet/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}/{checkpoint}.pth.pkl',fold=range(5),allow_missing=True),
+
     output:
-        model_tar = 'trained_model.{arch}.{dataset}.{trainer}.{checkpoint}.tar'
+        model_tar = 'trained_model.{arch}.{dataset}.{trainer}.tar'
     shell:
         'tar -cvf {output} -C {params.trained_model_dir} {params.files_to_tar}'
 
 
 rule predict_test_subj:
     input:
-        in_training_folder = expand('trained_models/nnUNet/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}',fold=range(5),allow_missing=True),
-        latest_model = expand('trained_models/nnUNet/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}/{checkpoint}.pth',fold=range(5),allow_missing=True),
+        training_done = 'trained_models/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}.DONE',
+#        in_training_folder = expand('trained_models/nnUNet/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}',fold=range(5),allow_missing=True),
+#        latest_model = expand('trained_models/nnUNet/{dataset}/{trainer}__{plans}__{arch}/fold_{fold}/{checkpoint}.pth',fold=range(5),allow_missing=True),
         testing_imgs = expand('raw_data/{dataset}/imagesTs/hcp_{subject}{hemi}_0000.nii.gz',subject=testing_subjects, hemi=hemis, allow_missing=True),
     params:
         in_folder = 'raw_data/{dataset}/imagesTs',
-        out_folder = 'raw_data/nnUNet_predictions/{dataset}/{trainer}__{plans}__{arch}/{checkpoint}',
+        out_folder = 'raw_data/nnUNet_predictions/{dataset}/{trainer}__{plans}__{arch}',
         nnunet_env_cmd = get_nnunet_env,
+        checkpoint = 'checkpoint_final',
     output:
         testing_imgs = expand('raw_data/nnUNet_predictions/{dataset}/{trainer}__{plans}__{arch}/{checkpoint}/hcp_{subject}{hemi}.nii.gz',subject=testing_subjects, hemi=hemis, allow_missing=True),
     threads: 8 
@@ -173,7 +197,7 @@ rule predict_test_subj:
     group: 'inference'
     shell:
         '{params.nnunet_env_cmd} && '
-        'nnUNetv2_predict  -chk {wildcards.checkpoint}  -i {params.in_folder} -o {params.out_folder} -t {wildcards.task}'
+        'nnUNetv2_predict  -chk {params.checkpoint}  -i {params.in_folder} -o {params.out_folder} -t {wildcards.task}'
 
    
         
