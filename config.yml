@@ -16,19 +16,18 @@ dataset_json:
   license: CC-BY-SA 4.0
   release: 0.1
   tensorImageSize: 3D
-  channel_names:
+  modality:
     '0': T1
   labels:
-    background: 0
-    GM: 1
-    SRLM: 2
-    MTLC: 3
-    Pial: 4
-    HATA: 5
-    IndGris: 6
-    Cyst: 7
-    DG: 8
-  file_ending: .nii.gz
+   "0": "background"
+   "1": "GM"
+   "2": "SRLM"
+   "3": "MTLC"
+   "4": "Pial"
+   "5": "HATA"
+   "6": "IndGris"
+   "7": "Cyst"
+   "8": "DG"
   numTraining: 0
   numTest: 0
   training: []
@@ -36,21 +35,20 @@ dataset_json:
   
 
 
-
 out_resolution: '128x256x128'
-dataset: Dataset301_dhcp_T1w_synthseg_manuallycorrected 
+task: Task301_dhcp_T1w_synthseg_manuallycorrected
 trainer: nnUNetTrainer
-plans: nnUNetPlans
+plans: nnUNetPlansv2.1
 architecture: 3d_fullres
 checkpoint: checkpoint_best #or checkpoint_final
 
 nnunet_env:
-  nnUNet_raw: 'raw_data'
+  nnUNet_raw_data_base: 'raw_data'
   nnUNet_preprocessed: 'preprocessed'
-  nnUNet_results: 'trained_models'
+  RESULTS_FOLDER: 'trained_models'
 
 nnunet_env_tmp:
   nnUNet_raw_data_base: 'raw_data'
   nnUNet_preprocessed: '$TMPDIR/preprocessed'
-  nnUNet_results: 'trained_models'
+  RESULTS_FOLDER: 'trained_models'
 
