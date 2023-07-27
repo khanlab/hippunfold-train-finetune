@@ -26,7 +26,7 @@ localrules: cp_training_img,cp_training_lbl,plan_preprocess,create_dataset_json
 
 rule all_train:
     input:
-       expand('trained_models/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_{fold}.round_{i}.DONE',fold=range(5), arch=config['architecture'], task=config['task'], trainer=config['trainer'],plans=config['plans'],i=16)
+       expand('trained_models/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_{fold}.round_{i}.DONE',fold=range(5), arch=config['architecture'], task=config['task'], trainer=config['trainer'],plans=config['plans'],i=8)
 
  
 rule all_model_tar:
@@ -118,19 +118,22 @@ rule train_fold_init_round:
         nnunet_env_cmd = get_nnunet_env_tmp,
         rsync_to_tmp = f"rsync -av {config['nnunet_env']['nnUNet_preprocessed']} $TMPDIR",
         output_dir = 'trained_models/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_{fold}',
+        timeout = lambda wildcards, resources: '{timeout}m'.format(timeout=(resources.time - 10))
     output:
         training_done = 'trained_models/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_{fold}.round_0.DONE'
     threads: 16
     resources:
         gpus = 1,
         mem_mb = 32000,
-        time = 180,
+        time = 360,
     shell:
         '{params.nnunet_env_cmd} && '
         '{params.rsync_to_tmp} && '
         'touch {output} && '
         'set +e; '
+        'timeout {params.timeout} '
         'nnUNet_train  {wildcards.arch} {wildcards.trainer} {wildcards.task} {wildcards.fold}'
+        ' || true'
 
 
      
@@ -142,21 +145,21 @@ rule train_fold_round_i:
         nnunet_env_cmd = get_nnunet_env_tmp,
         rsync_to_tmp = f"rsync -av {config['nnunet_env']['nnUNet_preprocessed']} $TMPDIR",
         output_dir = 'trained_models/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_{fold}',
+        timeout = lambda wildcards, resources: '{timeout}m'.format(timeout=(resources.time - 10))
     output:
         training_done = 'trained_models/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_{fold}.round_{i}.DONE'
-#        latest_model = 'trained_models/nnUNet/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_{fold}/checkpoint_best.pth',
-#        best_model = 'trained_models/nnUNet/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_{fold}/checkpoint_final.pth'
     threads: 16
     resources:
         gpus = 1,
         mem_mb = 32000,
-        time = 180,
+        time = 360,
     shell:
         '{params.nnunet_env_cmd} && '
         '{params.rsync_to_tmp} && '
         'touch {output} && '
         'set +e; '
-        'nnUNet_train --continue_training  {wildcards.arch} {wildcards.trainer} {wildcards.task} {wildcards.fold}'
+        'timeout {params.timeout} nnUNet_train --continue_training  {wildcards.arch} {wildcards.trainer} {wildcards.task} {wildcards.fold}'
+        ' || true'
 
 
 rule package_trained_model:
