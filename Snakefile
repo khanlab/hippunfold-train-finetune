@@ -26,7 +26,7 @@ localrules: cp_training_img,cp_training_lbl,plan_preprocess,create_dataset_json
 
 rule all_train:
     input:
-       expand('trained_models/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_{fold}.round_{i}.DONE',fold=range(5), arch=config['architecture'], task=config['task'], trainer=config['trainer'],plans=config['plans'],i=8)
+       expand('trained_models/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_{fold}.round_{i}.DONE',fold=range(5), arch=config['architecture'], task=config['task'], trainer=config['trainer'],plans=config['plans'],i=0)
 
  
 rule all_model_tar:
@@ -125,7 +125,7 @@ rule train_fold_init_round:
     resources:
         gpus = 1,
         mem_mb = 32000,
-        time = 360,
+        time = 4320,
     shell:
         '{params.nnunet_env_cmd} && '
         '{params.rsync_to_tmp} && '
@@ -152,7 +152,7 @@ rule train_fold_round_i:
     resources:
         gpus = 1,
         mem_mb = 32000,
-        time = 360,
+        time = 4320,
     shell:
         '{params.nnunet_env_cmd} && '
         '{params.rsync_to_tmp} && '
@@ -165,16 +165,16 @@ rule train_fold_round_i:
 rule package_trained_model:
     """ Creates tar file for performing inference with workflow_inference -- note, if you do not run training to completion (1000 epochs), then you will need to clear the snakemake metadata before running this rule, else snakemake will not believe that the model has completed. """
     input:
-        training_done = 'trained_models/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_{fold}.DONE'
+        training_done = 'trained_models/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_{fold}.round_{i}.DONE'
 
     params:
         trained_model_dir = config['nnunet_env']['RESULTS_FOLDER'],
-        files_to_tar = 'nnUNet/nnUNet/{arch}/{task}/{trainer}__{plans}'
+        files_to_tar = 'nnUNet/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_* nnUNet/nnUNet/{arch}/{task}/{trainer}__{plans}/*.pkl'
 #        latest_model = expand('trained_models/nnUNet/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_{fold}/{checkpoint}.pth',fold=range(5),allow_missing=True),
 #        latest_model_pkl = expand('trained_models/nnUNet/nnUNet/{arch}/{task}/{trainer}__{plans}/fold_{fold}/{checkpoint}.pth.pkl',fold=range(5),allow_missing=True),
 
     output:
-        model_tar = 'trained_model.{arch}.{task}.{trainer}.tar'
+        model_tar = 'round_{i}/trained_model.{arch}.{task}.{trainer}__{plans}.tar'
     shell:
         'tar -cvf {output} -C {params.trained_model_dir} {params.files_to_tar}'
 
